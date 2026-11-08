@@ -14,9 +14,12 @@ import (
 
 func TestServeHTTP_SecondGetIsServedFromCache(t *testing.T) {
 	var originHits atomic.Int64
+
+	resBody := "hello, world"
+
 	origin := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		originHits.Add(1)
-		w.Write([]byte("hello, world"))
+		_, _ = w.Write([]byte(resBody))
 	}))
 
 	client := origin.Client()
@@ -38,6 +41,7 @@ func TestServeHTTP_SecondGetIsServedFromCache(t *testing.T) {
 
 	xCache := rec.Result().Header.Get(headerXCache)
 	require.Equal(cacheMiss, xCache)
+	assert.Equal(resBody, rec.Body.String())
 
 	newRec := httptest.NewRecorder()
 	newReq := httptest.NewRequest("GET", "/products?limit=3", nil)
@@ -47,6 +51,6 @@ func TestServeHTTP_SecondGetIsServedFromCache(t *testing.T) {
 	newXCache := newRec.Result().Header.Get(headerXCache)
 	require.Equal(cacheHit, newXCache)
 
-	assert.Equal(originHits.Load(), int64(1))
-	assert.Equal(rec.Body.String(), newRec.Body.String())
+	assert.Equal(int64(1), originHits.Load())
+	assert.Equal(resBody, newRec.Body.String())
 }

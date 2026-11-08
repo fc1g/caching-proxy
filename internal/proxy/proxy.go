@@ -59,7 +59,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			w.Header().Set(headerXCache, cacheHit)
 			w.WriteHeader(e.StatusCode)
-			w.Write(e.Body)
+			if _, err := w.Write(e.Body); err != nil {
+				log.Printf("write response: %v", err)
+			}
 
 			return
 		}
@@ -89,7 +91,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeUpstreamError(w, err)
 		return
 	}
-	defer res.Body.Close()
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	if res.StatusCode != http.StatusOK {
 		shouldCache = false
@@ -124,7 +128,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerXCache, cacheMiss)
 	w.WriteHeader(res.StatusCode)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Printf("write response: %v", err)
+	}
 }
 
 func writeUpstreamError(w http.ResponseWriter, err error) {

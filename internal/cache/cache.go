@@ -25,7 +25,7 @@ type Entry struct {
 
 func NewStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
-		return nil, fmt.Errorf("create a directory named path: %w", err)
+		return nil, fmt.Errorf("create cache dir: %w", err)
 	}
 
 	return &Store{
@@ -43,7 +43,9 @@ func (s *Store) Set(key string, e Entry) error {
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
-	defer os.Remove(file.Name())
+	defer func() {
+		_ = os.Remove(file.Name())
+	}()
 
 	_, err = file.Write(data)
 	if err != nil {
@@ -67,7 +69,9 @@ func (s *Store) Get(key string) (Entry, error) {
 	if err != nil {
 		return Entry{}, fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	var entry Entry
 	decoder := json.NewDecoder(file)
@@ -84,7 +88,7 @@ func (s *Store) Clear() error {
 	}
 
 	if err := os.MkdirAll(s.dir, dirPerm); err != nil {
-		return fmt.Errorf("create a directory named path: %w", err)
+		return fmt.Errorf("create cache dir: %w", err)
 	}
 
 	return nil
