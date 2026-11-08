@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fc1g/caching-proxy/internal/cache"
 	"github.com/fc1g/caching-proxy/internal/config"
 	"github.com/fc1g/caching-proxy/internal/proxy"
 )
@@ -26,25 +27,39 @@ const (
 )
 
 func main() {
-	if err := run(); err != nil {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Failed to load config: %v", err)
+		os.Exit(1)
+	}
+
+	if err := run(cfg); err != nil {
 		log.Printf("Application failed: %v", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
+func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	cacheStore, err := cache.NewStore()
+	if err != nil {
+		return err
+	}
+
+	if cfg.ClearCache {
+		if err := cacheStore.Clear(); err != nil {
+			return fmt.Errorf("clear cache: %w", err)
+		}
+		log.Println("cache cleared")
+		return nil
+	}
 
 	client := &http.Client{
 		Timeout: clientTimeout,
 	}
-	handler := proxy.NewHandler(cfg.Origin, client)
+	handler := proxy.NewHandler(cfg.Origin, cacheStore, client)
 
 	errCh := make(chan error, 1)
 	s := &http.Server{

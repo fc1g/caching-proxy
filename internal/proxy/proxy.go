@@ -7,16 +7,20 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+
+	"github.com/fc1g/caching-proxy/internal/cache"
 )
 
 type Handler struct {
 	origin *url.URL
+	cache  *cache.Store
 	client *http.Client
 }
 
-func NewHandler(o *url.URL, c *http.Client) *Handler {
+func NewHandler(o *url.URL, cs *cache.Store, c *http.Client) *Handler {
 	return &Handler{
 		origin: o,
+		cache:  cs,
 		client: c,
 	}
 }
@@ -27,8 +31,32 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fullURL := h.origin.JoinPath(r.URL.EscapedPath())
 	fullURL.RawQuery = r.URL.RawQuery
 
+	cacheKey := cache.GenerateCacheKey(r.Method, fullURL.String())
+
 	if r.Method != http.MethodGet {
 		shouldCache = false
+	}
+
+	for key := range r.Header {
+		if key == "Authorization" || key == "Cookie" {
+			shouldCache = false
+		}
+	}
+
+	if shouldCache {
+		if e, err := h.cache.Get(cacheKey); err == nil {
+			for key, values := range e.Header {
+				for _, value := range values {
+					w.Header().Add(key, value)
+				}
+			}
+
+			w.Header().Set("X-Cache", "HIT")
+			w.WriteHeader(e.StatusCode)
+			w.Write(e.Body)
+
+			return
+		}
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, fullURL.String(), r.Body)
@@ -40,8 +68,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.ContentLength = r.ContentLength
 
 	for key, values := range r.Header {
-		if key == "Authorization" || key == "Cookie" {
-			shouldCache = false
+		if key == "Accept-Encoding" {
+			continue
 		}
 
 		for _, value := range values {
@@ -78,7 +106,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("shouldCache: %t\n", shouldCache)
+	if shouldCache {
+		if err := h.cache.Set(cacheKey, cache.Entry{
+			Body:       data,
+			StatusCode: res.StatusCode,
+			Header:     res.Header,
+		}); err != nil {
+			log.Printf("set cache: %v", err)
+		}
+	}
 
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(res.StatusCode)
@@ -87,12 +123,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func writeUpstreamError(w http.ResponseWriter, err error) {
 	w.Header().Set("X-Cache", "MISS")
-	
+
 	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 		http.Error(w, http.StatusText(http.StatusGatewayTimeout), http.StatusGatewayTimeout)
 		return
 	}
 
 	http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
-	return
 }
