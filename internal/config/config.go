@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -17,8 +18,8 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	port := flag.Int("port", 8080, "is the port on which the caching proxy server will run")
-	origin := flag.String("origin", "https://jsonplaceholder.typicode.com", "is the URL of the server to which the requests will be forwarded")
+	port := flag.Int("port", 0, "is the port on which the caching proxy server will run")
+	origin := flag.String("origin", "", "is the URL of the server to which the requests will be forwarded")
 
 	flag.Parse()
 
@@ -46,6 +47,10 @@ func validatePort(port int) error {
 }
 
 func parseOrigin(origin string) (*url.URL, error) {
+	if origin == "" {
+		return nil, errors.New("--origin is required")
+	}
+
 	u, err := url.ParseRequestURI(origin)
 	if err != nil {
 		return nil, fmt.Errorf("invalid origin %q: %w", origin, err)
