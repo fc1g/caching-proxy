@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -24,6 +25,8 @@ const (
 	shutdownTimeout = 10 * time.Second
 
 	clientTimeout = 8 * time.Second
+
+	cacheDirName = "caching-proxy"
 )
 
 func main() {
@@ -43,7 +46,14 @@ func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cacheStore, err := cache.NewStore()
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return fmt.Errorf("user cache dir: %w", err)
+	}
+
+	dir := filepath.Join(cacheDir, cacheDirName)
+
+	cacheStore, err := cache.NewStore(dir)
 	if err != nil {
 		return err
 	}

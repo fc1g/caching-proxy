@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	cacheDirName = "caching-proxy"
-	dirPerm      = 0o700
+	dirPerm = 0o700
 )
 
 type Store struct {
@@ -24,14 +23,7 @@ type Entry struct {
 	Header     map[string][]string
 }
 
-func NewStore() (*Store, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("user cache dir: %w", err)
-	}
-
-	dir := filepath.Join(cacheDir, cacheDirName)
-
+func NewStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return nil, fmt.Errorf("create a directory named path: %w", err)
 	}

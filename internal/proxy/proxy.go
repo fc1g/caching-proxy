@@ -11,6 +11,12 @@ import (
 	"github.com/fc1g/caching-proxy/internal/cache"
 )
 
+const (
+	headerXCache = "X-Cache"
+	cacheHit     = "HIT"
+	cacheMiss    = "MISS"
+)
+
 type Handler struct {
 	origin *url.URL
 	cache  *cache.Store
@@ -51,7 +57,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			w.Header().Set("X-Cache", "HIT")
+			w.Header().Set(headerXCache, cacheHit)
 			w.WriteHeader(e.StatusCode)
 			w.Write(e.Body)
 
@@ -116,13 +122,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("X-Cache", "MISS")
+	w.Header().Set(headerXCache, cacheMiss)
 	w.WriteHeader(res.StatusCode)
 	w.Write(data)
 }
 
 func writeUpstreamError(w http.ResponseWriter, err error) {
-	w.Header().Set("X-Cache", "MISS")
+	w.Header().Set(headerXCache, cacheMiss)
 
 	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 		http.Error(w, http.StatusText(http.StatusGatewayTimeout), http.StatusGatewayTimeout)
