@@ -6,50 +6,57 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/fc1g/caching-proxy/internal/config"
+	"github.com/fc1g/caching-proxy/internal/proxy"
 )
 
 const (
-	readTimeout     = 10 * time.Second
-	writeTimeout    = 10 * time.Second
+	readTimeout    = 10 * time.Second
+	writeTimeout   = 10 * time.Second
+	maxHeaderBytes = 1 << 20
+
 	shutdownTimeout = 10 * time.Second
-	maxHeaderBytes  = 1 << 20
+
+	clientTimeout = 8 * time.Second
 )
 
 func main() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Printf("load config: %v", err)
-		os.Exit(1)
-	}
-
-	if err := run(cfg.Port, cfg.Origin); err != nil {
+	if err := run(); err != nil {
 		log.Printf("Application failed: %v", err)
 		os.Exit(1)
 	}
 }
 
-func run(port int, origin *url.URL) error {
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	client := &http.Client{
+		Timeout: clientTimeout,
+	}
+	handler := proxy.NewHandler(cfg.Origin, client)
+
 	errCh := make(chan error, 1)
 	s := &http.Server{
-		Addr:           fmt.Sprintf(":%d", port),
-		Handler:        nil,
+		Addr:           fmt.Sprintf(":%d", cfg.Port),
+		Handler:        handler,
 		ReadTimeout:    readTimeout,
 		WriteTimeout:   writeTimeout,
 		MaxHeaderBytes: maxHeaderBytes,
 	}
 
 	go func() {
-		log.Printf("starting server on port :%d", port)
+		log.Printf("starting server on port :%d", cfg.Port)
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
