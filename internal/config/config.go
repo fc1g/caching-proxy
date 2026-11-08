@@ -13,15 +13,23 @@ const (
 )
 
 type Config struct {
-	Port   int
-	Origin *url.URL
+	Port       int
+	Origin     *url.URL
+	ClearCache bool
 }
 
 func Load() (*Config, error) {
 	port := flag.Int("port", 0, "is the port on which the caching proxy server will run")
 	origin := flag.String("origin", "", "is the URL of the server to which the requests will be forwarded")
+	clearCache := flag.Bool("clear-cache", false, "clear the cache and exit")
 
 	flag.Parse()
+
+	if *clearCache {
+		return &Config{
+			ClearCache: true,
+		}, nil
+	}
 
 	if err := validatePort(*port); err != nil {
 		return nil, err
