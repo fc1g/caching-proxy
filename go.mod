@@ -1,6 +1,6 @@
 module github.com/fc1g/caching-proxy
 
-go 1.27.3
+go 1.27.1
 
 require github.com/stretchr/testify v1.12.1
 
